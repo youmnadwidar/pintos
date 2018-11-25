@@ -201,7 +201,19 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* test if it should yield to processor */
+  test_priority_preemption(t);
+
   return tid;
+}
+void test_priority_preemption (struct thread *t){
+
+  enum intr_level old_level =  intr_disable();  
+  if( thread_current ()->priority < t->priority) {
+    thread_yield ();
+  }
+  intr_set_level(old_level);
+
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -237,7 +249,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  //list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list , &t->elem , compare_threads , NULL );
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -308,7 +321,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  //list_push_back (&ready_list, &cur->elem);
+  list_insert_ordered(&ready_list , &cur->elem , compare_threads , NULL );
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -492,10 +506,24 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
-}
+  else{  
 
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+}
+/* Compares the value of two list elements A and B, given
+   auxiliary data AUX.  Returns true if A is less than B, or
+   false if A is greater than or equal to B. */
+bool compare_threads (const struct list_elem *a,
+              const struct list_elem *b,
+              void *aux UNUSED){
+  struct thread *thread_1 = list_entry (a, struct thread, elem);
+  struct thread *thread_2 = list_entry (b, struct thread, elem);
+  int priority_1 = thread_1->priority;
+  int priority_2 = thread_2->priority;
+  return priority_1 < priority_2 ;
+
+}
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
